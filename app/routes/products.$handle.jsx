@@ -10,6 +10,8 @@ import {
   CartForm,
 } from '@shopify/hydrogen';
 import {getVariantUrl} from '~/utils';
+import { AddToCartButton } from '~/components/global/AddToCartButton';
+import { LoaderIcon } from '~/components/global/Icons';
 
 export const meta = ({data}) => {
   return [{title: `Hydrogen | ${data.product.title}`}];
@@ -194,23 +196,19 @@ function ProductForm({product, selectedVariant, variants}) {
       </VariantSelector>
       <br />
       <AddToCartButton
-        disabled={!selectedVariant || !selectedVariant.availableForSale}
-        onClick={() => {
-          window.location.href = window.location.href + '#cart-aside';
-        }}
-        lines={
-          selectedVariant
-            ? [
-                {
-                  merchandiseId: selectedVariant.id,
-                  quantity: 1,
-                },
-              ]
-            : []
-        }
-      >
-        {selectedVariant?.availableForSale ? 'Add to cart' : 'Sold out'}
-      </AddToCartButton>
+                        width='w-full'
+                        fallback={<div className="text-center w-full py-1 px-7  bg-blue rounded-sm"><LoaderIcon height={44} width={44} /></div>}
+                        lines={[
+                            {
+                                merchandiseId: selectedVariant.id,
+                                quantity: 1,
+                            },
+                        ]}
+                    ><button
+                        as="button"
+                        type="submit"
+                        className='text-center w-full text-black text-sm py-4 font-medium uppercase tracking-wide px-7  bg-blue rounded-sm'
+                    >Add to Cart</button></AddToCartButton>
     </div>
   );
 }
@@ -244,28 +242,7 @@ function ProductOptions({option}) {
   );
 }
 
-function AddToCartButton({analytics, children, disabled, lines, onClick}) {
-  return (
-    <CartForm route="/cart" inputs={{lines}} action={CartForm.ACTIONS.LinesAdd}>
-      {(fetcher) => (
-        <>
-          <input
-            name="analytics"
-            type="hidden"
-            value={JSON.stringify(analytics)}
-          />
-          <button
-            type="submit"
-            onClick={onClick}
-            disabled={disabled ?? fetcher.state !== 'idle'}
-          >
-            {children}
-          </button>
-        </>
-      )}
-    </CartForm>
-  );
-}
+
 
 const PRODUCT_VARIANT_FRAGMENT = `#graphql
   fragment ProductVariant on ProductVariant {

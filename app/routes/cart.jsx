@@ -1,41 +1,35 @@
-import {Await, useMatches} from '@remix-run/react';
-import {Suspense} from 'react';
-import {CartForm} from '@shopify/hydrogen';
+import {Await, useActionData, useMatches, useSubmit} from '@remix-run/react';
+import {Suspense, useEffect} from 'react';
 import {json} from '@shopify/remix-oxygen';
-import {CartMain} from '~/components/Cart';
+import { CART_ACTIONS } from '~/utils/constants';
+import   CartMain  from '~/components/pages/cart/CartMain';
 
-export const meta = () => {
-  return [{title: `Hydrogen | Cart`}];
+export const meta = ({matches}) => {
+  const title = matches[0]?.data?.header?.data?.shop?.name
+  return [{title: `${title} | Cart`}];
 };
 
 export async function action({request, context}) {
   const {session, cart} = context;
-
   const [formData, customerAccessToken] = await Promise.all([
     request.formData(),
     session.get('customerAccessToken'),
   ]);
-
-  const {action, inputs} = CartForm.getFormInput(formData);
-
-  if (!action) {
-    throw new Error('No action provided');
-  }
-
+  const cartAction = formData.get('cartAction');
   let status = 200;
   let result;
-
-  switch (action) {
-    case CartForm.ACTIONS.LinesAdd:
-      result = await cart.addLines(inputs.lines);
+  switch (cartAction) {
+    case CART_ACTIONS['ADD_TO_CART']:
+      const lines=JSON.parse( formData.get('lines'))
+      result = await cart.addLines(lines);
       break;
-    case CartForm.ACTIONS.LinesUpdate:
-      result = await cart.updateLines(inputs.lines);
+    case CART_ACTIONS['UPDATE_CART']:
+      result = await cart.updateLines(JSON.parse( formData.get('lines')));
       break;
-    case CartForm.ACTIONS.LinesRemove:
-      result = await cart.removeLines(inputs.lineIds);
+    case CART_ACTIONS['REMOVE_FROM_CART']:
+      result = await cart.removeLines(JSON.parse( formData.get('linesIds')));
       break;
-    case CartForm.ACTIONS.DiscountCodesUpdate: {
+    case CART_ACTIONS['UPDATE_DISCOUNT']: {
       const formDiscountCode = inputs.discountCode;
 
       // User inputted discount code
@@ -47,7 +41,7 @@ export async function action({request, context}) {
       result = await cart.updateDiscountCodes(discountCodes);
       break;
     }
-    case CartForm.ACTIONS.BuyerIdentityUpdate: {
+    case  CART_ACTIONS['UPDATE_BUYER_IDENTITY']: {
       result = await cart.updateBuyerIdentity({
         ...inputs.buyerIdentity,
         customerAccessToken,
@@ -82,15 +76,51 @@ export async function action({request, context}) {
 
 export default function Cart() {
   const [root] = useMatches();
+  const submit=useSubmit()
   const cart = root.data?.cart;
-
+  const UpSaleProductId="gid://shopify/ProductVariant/43696936583190"
+  const checkUpSaleProductExistInLines=cart.lines.nodes.find((cv)=>cv.merchandise.id == UpSaleProductId) || null
+  const addUpSaleProduct=()=>{
+    const formData = new FormData()
+    formData.append("cartAction",CART_ACTIONS['ADD_TO_CART'])
+    formData.append("lines",JSON.stringify({
+      merchandiseId:UpSaleProductId,
+      quantity: 1,
+    }))
+    submit(
+      formData, //Notice this change
+      { method: "post", action: "/cart" }
+    );
+  }
+  const updateUpSaleProduct=(id)=>{
+    const formData = new FormData()
+    formData.append("linesIds", JSON.stringify(id));
+    formData.append("cartAction", CART_ACTIONS['REMOVE_FROM_CART']);
+    submit(
+      formData, //Notice this change
+      { method: "post", action: "/cart" }
+    );
+  }
+  useEffect(()=>{
+    const totalCartAmount=parseFloat(cart.cost.totalAmount.amount)
+    const limitForUpSaleCartAmount=parseFloat(100)
+   if(totalCartAmount >= limitForUpSaleCartAmount){
+    if(!checkUpSaleProductExistInLines){
+      addUpSaleProduct()
+    }
+   }
+   if(totalCartAmount < limitForUpSaleCartAmount){
+    if(checkUpSaleProductExistInLines){
+      updateUpSaleProduct(checkUpSaleProductExistInLines.id)
+    }
+   }
+  },[cart.totalQuantity])
   return (
     <div className="cart">
-      <h1>Cart</h1>
       <Suspense fallback={<p>Loading cart ...</p>}>
         <Await errorElement={<div>An error occurred</div>} resolve={cart}>
           {(cart) => {
-            return <CartMain layout="page" cart={cart} />;
+            return <CartMain  cart={cart} />;
           }}
         </Await>
       </Suspense>
